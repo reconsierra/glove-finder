@@ -1,3 +1,4 @@
+
 # app.py
 import os
 from typing import Dict, List
@@ -11,12 +12,13 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 
 # =========================================================
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
-# Left and right columns render top-to-bottom in this order
+# Left and right columns render top-to-bottom in this order.
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
 ORDER_LEFT  = ["Colour", "Cut Category", "Cut rating"]
 ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
+
 
 # -----------------------------
 # Embedded image extraction
@@ -80,6 +82,7 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
         return mapping
     return mapping
 
+
 # -----------------------------
 # Data loader
 # -----------------------------
@@ -133,8 +136,10 @@ def load_data(path: str) -> pd.DataFrame:
 
     return df
 
+
 DATA_PATH = "wurth_safety_glove_MASTER List.xlsx"
 df = load_data(DATA_PATH)
+
 
 # -----------------------------
 # Filter definitions & options
@@ -150,8 +155,10 @@ LABEL_TO_COL = {
 }
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
-def options_for(label: str) -> List[str]:
-    """Build option list forn filters (first option 'Any')."""
+def options_for(label: str) -> List:
+    """
+    Build option list for non-boolean filters (first option 'Any').
+    """
     if label == "Colour":
         vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
     elif label == "Cut Category":
@@ -161,6 +168,7 @@ def options_for(label: str) -> List[str]:
     else:
         vals = []
     return ["Any"] + [v for v in vals if v.strip()]
+
 
 # -----------------------------
 # Filter UI (two columns, code-ordered)
@@ -192,6 +200,7 @@ with st.container():
 
     go = st.button("Search", type="primary")
 
+
 # -----------------------------
 # Apply filters
 # -----------------------------
@@ -211,7 +220,7 @@ if go:
         if not yes_checked or col_bool not in filtered.columns:
             # Not checked -> no filtering; or no bool column available
             return filtered
-        return filtered[filtered[col_bool] == True]  # noqa: E712 (explicit True)
+        return filtered[filtered[col_bool] is True]
 
     filtered = apply_yes_only(LABEL_TO_COL["Food Safe?"], bool(selections.get("Food Safe?", False)))
     filtered = apply_yes_only(LABEL_TO_COL["Chemical rated?"], bool(selections.get("Chemical rated?", False)))
@@ -244,27 +253,3 @@ if go:
             # Attributes grid (compact)
             attrs = []
             for label in [
-                "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
-                "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
-            ]:
-                val = row.get(label, None)
-                if pd.isna(val):
-                    continue
-                attrs.append((label, str(val)))
-
-            a1, a2 = right.columns(2)
-            half = (len(attrs) + 1) // 2
-            for col, items in [(a1, attrs[:half]), (a2, attrs[half:])]:
-                for label, val in items:
-                    col.markdown(f"**{label}:** {val}")
-            st.divider()
-
-    if not filtered.empty:
-        csv = filtered.to_csv(index=False)
-        st.download_button(
-            "Download results (CSV)",
-            data=csv,
-            file_name="glove_finder_results.csv",
-            mime="text/csv",
-        )
-else:
