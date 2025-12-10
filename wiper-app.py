@@ -14,7 +14,7 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 # Left and right columns render top-to-bottom in this order.
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT  = ["Colour", "Cut Category", "Cut rating"]
+ORDER_LEFT  = ["Cut Category - (new style letter type)", "Cut rating (old style number type)", "Colour"]
 ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
 
@@ -186,7 +186,7 @@ with st.container():
         if label in BOOL_LABELS:
             # Single checkbox: if checked -> filter to Yes; if unchecked -> no filter applied
             key = f"yes_{label}"
-            selections[label] = col.checkbox(label + " (Yes only)", value=False, key=key)
+            selections[label] = col.checkbox(label + " (Yes)", value=False, key=key)
         else:
             opts = options_for(label)
             selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
