@@ -8,7 +8,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Glove Finder", page_icon="🧤", layout="wide")
 st.title("Glove Finder")
-st.caption("Find the right glove by cut level/category, colour and safety attributes.")
+st.caption("Find the right glove by cut category, colour and safety attributes. View full specs of selected gloves")
 
 # =========================================================
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
