@@ -134,7 +134,7 @@ LABEL_TO_COL = {
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
 
-ef options_for(label: str) -> List:
+def options_for(label: str) -> List:
     if label == "Colour":
         vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
     elif label == "Cut Category":
