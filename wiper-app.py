@@ -15,7 +15,7 @@ st.caption("Find the right glove by cut category, colour and safety attributes. 
 # Left and right columns render top-to-bottom in this order.
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT  = ["Cut Category", "Cut rating", "Colour"]
+ORDER_LEFT  = ["Cut Category (New letter style)", "Cut rating (old number style)", "Colour"]
 ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
 
