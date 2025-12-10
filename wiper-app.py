@@ -218,8 +218,11 @@ if go:
         col_bool = src_col_label + " (bool)"
         if not yes_checked or col_bool not in filtered.columns:
             # Not checked -> no filtering; or no bool column available
-            return filtered
-        return filtered[filtered[col_bool] is True]
+            return filtered                   
+        mask = filtered[col_bool].fillna(False) == True
+        return filtered[mask]
+
+
 
     filtered = apply_yes_only(LABEL_TO_COL["Food Safe?"], bool(selections.get("Food Safe?", False)))
     filtered = apply_yes_only(LABEL_TO_COL["Chemical rated?"], bool(selections.get("Chemical rated?", False)))
