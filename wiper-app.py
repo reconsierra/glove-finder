@@ -253,3 +253,28 @@ if go:
             # Attributes grid (compact)
             attrs = []
             for label in [
+                "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
+                "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
+            ]:
+                val = row.get(label, None)
+                if pd.isna(val):
+                    continue
+                attrs.append((label, str(val)))
+
+            a1, a2 = right.columns(2)
+            half = (len(attrs) + 1) // 2
+            for col, items in [(a1, attrs[:half]), (a2, attrs[half:])]:
+                for label, val in items:
+                    col.markdown(f"**{label}:** {val}")
+            st.divider()
+
+    if not filtered.empty:
+        csv = filtered.to_csv(index=False)
+        st.download_button(
+            "Download results (CSV)",
+            data=csv,
+            file_name="glove_finder_results.csv",
+            mime="text/csv",
+        )
+else:
+    st.info("Choose filters above and press **Search** to see matching gloves.")
