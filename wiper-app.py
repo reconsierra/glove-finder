@@ -11,10 +11,11 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 
 # =========================================================
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
+# Left and right columns render top-to-bottom in this order.
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
-ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
+ORDER_LEFT  = ["Colour", "Cut Category", "Cut rating"]
+ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
 
 
@@ -142,7 +143,8 @@ df = load_data(DATA_PATH)
 # -----------------------------
 # Filter definitions & options
 # -----------------------------
-LABEL_TO_COL: Dict[str, str] = {
+# Display labels -> underlying data columns (for filtering)
+LABEL_TO_COL = {
     "Colour": "Colour",
     "Cut Category": "Cut Category",
     "Cut rating": "Cut",
@@ -152,51 +154,19 @@ LABEL_TO_COL: Dict[str, str] = {
 }
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
-# Placeholders to ignore when building option lists
-PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated"}
-
-def _clean_vals(series: pd.Series) -> List[str]:
+def options_for(label: str) -> List:
     """
-    Normalise and return distinct, non-placeholder values for dropdowns.
-    - Converts to str, strips whitespace
-    - Drops placeholders/blanks
-    - Returns a stable, user-friendly sort:
-        * numeric tokens in ascending order, then alphabetical
-    """
-    vals: List[str] = []
-    ifNone or series.empty:
-        return vals
-    for v in series:
-        s = str(v).strip()
-        if not s:
-            continue
-        if s.lower() in PLACEHOLDERS:
-            continue
-        vals.append(s)  # keep original case for display
-    # Unique + sorted: numbers first by numeric value, then text (case-insensitive)
-    uniq = sorted(set(vals), key=lambda x: (0, int(x)) if x.isdigit() else (1, x.upper()))
-    return uniq
-
-def options_for(label: str) -> List"""
     Build option list for non-boolean filters (first option 'Any').
-    Hardened against placeholders and blanks so the list never collapses.
     """
     if label == "Colour":
-        uniq = _clean_vals(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str))
+        vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
     elif label == "Cut Category":
-        uniq = _clean_vals(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str))
-        # Prefer A..F order if present; keep 'X' last
-        order_map = {k: i for i, k in enumerate(list("ABCDEF"))}
-        uniq = sorted(uniq, key=lambda x: (order_map.get(x.upper(), 99), x.upper()))
+        vals = sorted(set(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str)))
     elif label == "Cut rating":
-        uniq = _clean_vals(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str))
-        # Numeric levels before 'X' or other tokens
-        def _key(x: str):
-            return (0, int(x)) if x.isdigit() else (1, x.upper())
-        uniq = sorted(uniq, key=_key)
+        vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
     else:
-        uniq = []
-    return ["Any"] + uniq
+        vals = []
+    return ["Any"] + [v for v in vals if v.strip()]
 
 
 # -----------------------------
@@ -208,12 +178,13 @@ with st.container():
     left_col, right_col = st.columns(2)
 
     # Store selections
-    # Non-boolean: str ("Any" or value)
-    # Boolean: True (Yes only) or False (Any)
+    # For non-boolean filters: value string ("Any" or selected value)
+    # For boolean filters: True (Yes only) or False (Any)
     selections: Dict[str, object] = {}
 
     def render_filter(label: str, col):
         if label in BOOL_LABELS:
+            # Single checkbox: if checked -> filter to Yes; if unchecked -> no filter applied
             key = f"yes_{label}"
             selections[label] = col.checkbox(label + " (Yes only)", value=False, key=key)
         else:
@@ -240,15 +211,15 @@ if go:
         sel = selections.get(label, "Any")
         if isinstance(sel, str) and sel != "Any":
             colname = LABEL_TO_COL[label]
-            filtered = filtered[filtered[colname].astype(str).str.strip() == sel]
+            filtered = filtered[filtered[colname].astype(str) == str(sel)]
 
     # Boolean filters (single Yes-only checkbox)
     def apply_yes_only(src_col_label: str, yes_checked: bool) -> pd.DataFrame:
         col_bool = src_col_label + " (bool)"
         if not yes_checked or col_bool not in filtered.columns:
+            # Not checked -> no filtering; or no bool column available
             return filtered
-        mask = filtered[col_bool].fillna(False) == True
-        return filtered[mask]
+        return filtered[filtered[col_bool] is True]
 
     filtered = apply_yes_only(LABEL_TO_COL["Food Safe?"], bool(selections.get("Food Safe?", False)))
     filtered = apply_yes_only(LABEL_TO_COL["Chemical rated?"], bool(selections.get("Chemical rated?", False)))
@@ -302,3 +273,7 @@ if go:
             "Download results (CSV)",
             data=csv,
             file_name="glove_finder_results.csv",
+            mime="text/csv",
+        )
+else:
+    st.info("Choose filters above and press **Search** to see matching gloves.")
