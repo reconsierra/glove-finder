@@ -2,13 +2,16 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from typing import Dict
+from typing import Dict, List
 import os
 
 st.set_page_config(page_title="Glove Finder", page_icon="🧤", layout="wide")
 st.title("Glove Finder")
 st.caption("Find the right glove by cut level/category, colour and safety attributes.")
 
+# -----------------------------
+# Embedded image extraction
+# -----------------------------
 @st.cache_data(show_spinner=False)
 def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[int, str]:
     """
@@ -25,39 +28,31 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
     try:
         wb = load_workbook(xlsx_path, data_only=True)
         ws = wb.active
-        # Ensure output dir
         os.makedirs(images_dir, exist_ok=True)
-        # openpyxl stores images in ws._images with anchors
         imgs = getattr(ws, "_images", [])
         for idx, img in enumerate(imgs, start=1):
             anchor = getattr(img, "anchor", None)
             row = None
-            # Try to derive row from anchor
             try:
-                # Anchor may be a single-cell coordinate like 'D2'
                 if isinstance(anchor, str):
                     _row = coordinate_to_tuple(anchor)[0]  # returns (row, col)
                     row = _row
                 else:
-                    # OneCellAnchor / TwoCellAnchor with ._from.row (0-based)
                     from_anchor = getattr(anchor, "_from", None)
                     if from_anchor is not None:
                         row = int(from_anchor.row) + 1
             except Exception:
                 row = None
 
-            # Save image bytes to file
             filename = f"row_{row or idx}.png"
             out_path = os.path.join(images_dir, filename)
             try:
-                # Many openpyxl Image objects expose a private _data() with PNG/JPEG bytes
                 data = img._data()  # type: ignore[attr-defined]
                 with open(out_path, "wb") as f:
                     f.write(data)
                 if row:
                     mapping[row] = out_path
             except Exception:
-                # If direct bytes not available, try PIL fallback
                 try:
                     from PIL import Image as PILImage
                     pil = getattr(img, "_image", None)
@@ -66,32 +61,31 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
                         if row:
                             mapping[row] = out_path
                 except Exception:
-                    # Give up on this image
                     pass
     except Exception:
         return mapping
     return mapping
 
+# -----------------------------
+# Data loader
+# -----------------------------
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
     # Extract any embedded images first; create row -> path mapping
     row_to_img = extract_embedded_images(path)
 
     df = pd.read_excel(path, engine="openpyxl")
-    # Normalise column names (Australian spelling)
     df.columns = [c.strip() for c in df.columns]
 
     # Ensure Image column exists; if empty, fill from extracted mapping by Excel row number
     if "Image" not in df.columns:
         df["Image"] = None
-    # Map by Excel row: pandas index 0 corresponds to Excel row 2 (assuming header row = 1)
     for i in range(len(df)):
-        excel_row = i + 2
+        excel_row = i + 2  # header assumed on row 1
         if pd.isna(df.at[i, "Image"]) or not str(df.at[i, "Image"]).strip():
             if excel_row in row_to_img:
                 df.at[i, "Image"] = row_to_img[excel_row]
 
-    # Expected columns
     expected = [
         "Glove Name","Article Numbers","Colour","Image","EN 388 Code","Abrasion","Cut",
         "Tear","Puncture","Cut Category","Impact","Chemical Resistance","Heat Resistance",
@@ -116,7 +110,6 @@ def load_data(path: str) -> pd.DataFrame:
         if col in df.columns:
             df[col + " (bool)"] = df[col].apply(to_bool)
 
-    # Tidy strings
     for col in ["EN 388 Code","Colour","Cut Category"]:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
@@ -126,65 +119,121 @@ def load_data(path: str) -> pd.DataFrame:
 DATA_PATH = "wurth_safety_glove_MASTER List.xlsx"
 df = load_data(DATA_PATH)
 
+# -----------------------------
+# Filter definitions & options
+# -----------------------------
+# Display labels -> underlying data columns (for filtering)
+LABEL_TO_COL = {
+    "Colour": "Colour",
+    "Cut Category": "Cut Category",
+    "Cut rating": "Cut",
+    "Food Safe?": "Food Safe",
+    "Chemical rated?": "Chemical Resistance",
+    "Heat rated?": "Heat Resistance",
+}
+BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
+
+def options_for(label: str) -> List[str]:
+    """Build option list for non-boolean filters (first option 'Any')."""
+l == "Colour":
+        vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
+    elif label == "Cut Category":
+        vals = sorted(set(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str)))
+    elif label == "Cut rating":
+        vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
+    else:
+        vals = []
+    return ["Any"] + [v for v in vals if v.strip()]
+
+# -----------------------------
+# Filter order editor (simple)
+# -----------------------------
+DEFAULT_LEFT = ["Colour", "Cut Category", "Cut rating"]
+DEFAULT_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
+ALL_FILTERS = DEFAULT_LEFT + DEFAULT_RIGHT
+
+with st.expander("Change filter display order", expanded=False):
+    st.caption("Choose which filters appear (top-to-bottom) in the left and right columns.")
+    # Left column order
+    left_order = st.multiselect(
+        "Left column (top to bottom)",
+        ALL_FILTERS,
+        default=DEFAULT_LEFT,
+        key="order_left",
+    )
+    # Right column options exclude those already placed left
+    remaining = [f for f in ALL_FILTERS if f not in left_order]
+    right_order = st.multiselect(
+        "Right column (top to bottom)",
+        remaining,
+        default=[f for f in DEFAULT_RIGHT if f in remaining] or remaining,
+        key="order_right",
+    )
+    # Finalise (append any missing filters to the shorter column, preserving order)
+    missing = [f for f in ALL_FILTERS if f not in left_order and f not in right_order]
+    if missing:
+        if len(left_order) <= len(right_order):
+            left_order += missing
+        else:
+            right_order += missing
+
+# -----------------------------
+# Filter UI (two columns)
+# -----------------------------
 with st.container():
     st.subheader("Filter")
-    # EN 388 selector removed; rebalance the layout: 3 + 3 columns
-    col1, col2, col3 = st.columns(3)
-    col4, col5, col6 = st.columns(3)
 
-    # Cut Category (A-F, X, etc.)
-    cut_cat_vals = sorted(set(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str)))
-    cut_cat_opts = ["Any"] + [v for v in cut_cat_vals if v.strip()]
-    cut_cat = col2.selectbox("Cut Category", cut_cat_opts, index=0)
+    left_col, right_col = st.columns(2)
 
-    # Cut rating (numeric or X)
-    cut_vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
-    cut_opts = ["Any"] + [v for v in cut_vals if v.strip()]
-    cut_rating = col1.selectbox("Cut rating", cut_opts, index=0)
-    
-    # Colour
-    colour_vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
-    colour_opts = ["Any"] + [v for v in colour_vals if v.strip()]
-    colour = col3.selectbox("Colour", colour_opts, index=0)
+    selections: Dict[str, str] = {}
 
-    # Food Safe?
-    food_opts = ["Any","Yes","No"]
-    food_safe = col4.selectbox("Food Safe?", food_opts, index=0)
+    # Render helper for a single filter
+    def render_filter(label: str, col: st.delta_generator.DeltaGenerator):
+        if label in BOOL_LABELS:
+            # Apply checkbox gives 'Any' state; value checkbox gives Yes/No
+            apply_key = f"apply_{label}"
+            val_key = f"val_{label}"
+            apply = col.checkbox(f"Filter {label}", value=False, key=apply_key)
+            val = col.checkbox(label + " (Yes)", value=True, key=val_key)
+            selections[label] = "Any" if not apply else ("Yes" if val else "No")
+        else:
+            opts = options_for(label)
+            selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
 
-    # Chemical rated?
-    chem_opts = ["Any","Yes","No"]
-    chem = col5.selectbox("Chemical rated?", chem_opts, index=0)
+    # Left column filters
+    for label in left_order:
+        render_filter(label, left_col)
 
-    # Heat rated?
-    heat_opts = ["Any","Yes","No"]
-    heat = col6.selectbox("Heat rated?", heat_opts, index=0)
+    # Right column filters
+    for label in right_order:
+        render_filter(label, right_col)
 
     go = st.button("Search", type="primary")
 
+# -----------------------------
 # Apply filters
+# -----------------------------
 if go:
     filtered = df.copy()
 
-    # EN 388 filter removed
+    # Non-boolean filters
+    for label in ["Colour", "Cut Category", "Cut rating"]:
+        val = selections.get(label, "Any")
+        if val != "Any":
+            colname = LABEL_TO_COL[label]
+            filtered = filtered[filtered[colname].astype(str) == str(val)]
 
-    if cut_rating != "Any" and "Cut" in filtered.columns:
-        filtered = filtered[filtered["Cut"].astype(str) == str(cut_rating)]
-    if cut_cat != "Any" and "Cut Category" in filtered.columns:
-        filtered = filtered[filtered["Cut Category"].astype(str) == str(cut_cat)]
-    if colour != "Any" and "Colour" in filtered.columns:
-        filtered = filtered[filtered["Colour"] == colour]
-
-    # Booleans
-    def apply_bool(col_label, selection):
+    # Boolean filters
+    def apply_bool(col_label: str, choice: str) -> pd.DataFrame:
         col_bool = col_label + " (bool)"
-        if selection == "Any" or col_bool not in filtered.columns:
+        if choice == "Any" or col_bool not in filtered.columns:
             return filtered
-        val = True if selection == "Yes" else False
-        return filtered[filtered[col_bool] == val]
+        want = True if choice == "Yes" else False
+        return filtered[filtered[col_bool] == want]
 
-    filtered = apply_bool("Food Safe", food_safe)
-    filtered = apply_bool("Chemical Resistance", chem)
-    filtered = apply_bool("Heat Resistance", heat)
+    filtered = apply_bool(LABEL_TO_COL["Food Safe?"], selections.get("Food Safe?", "Any"))
+    filtered = apply_bool(LABEL_TO_COL["Chemical rated?"], selections.get("Chemical rated?", "Any"))
+    filtered = apply_bool(LABEL_TO_COL["Heat rated?"], selections.get("Heat rated?", "Any"))
 
     st.subheader("Search results")
     st.write(f"{len(filtered)} result(s)")
