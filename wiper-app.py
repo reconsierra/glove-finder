@@ -132,16 +132,16 @@ with st.container():
     col1, col2, col3 = st.columns(3)
     col4, col5, col6 = st.columns(3)
 
-    # Cut rating (numeric or X)
-    cut_vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
-    cut_opts = ["Any"] + [v for v in cut_vals if v.strip()]
-    cut_rating = col1.selectbox("Cut rating", cut_opts, index=0)
-
     # Cut Category (A-F, X, etc.)
     cut_cat_vals = sorted(set(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str)))
     cut_cat_opts = ["Any"] + [v for v in cut_cat_vals if v.strip()]
     cut_cat = col2.selectbox("Cut Category", cut_cat_opts, index=0)
 
+    # Cut rating (numeric or X)
+    cut_vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
+    cut_opts = ["Any"] + [v for v in cut_vals if v.strip()]
+    cut_rating = col1.selectbox("Cut rating", cut_opts, index=0)
+    
     # Colour
     colour_vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
     colour_opts = ["Any"] + [v for v in colour_vals if v.strip()]
