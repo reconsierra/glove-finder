@@ -1,0 +1,28 @@
+# Glove Finder (Streamlit)
+
+A simple, iOS-friendly Streamlit app to filter and find gloves by EN388 rating, cut level/category, colour and safety attributes (food, chemical, heat). Results include a link to the product page, the glove image (if available), the name and a compact list of attributes.
+
+## Running locally
+
+1. Ensure the Excel file `wurth_safety_glove_MASTER List.xlsx` is in the repo root.
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Launch the app:
+   ```bash
+   streamlit run app.py
+   ```
+
+## Notes
+- The app expects the following columns in the Excel: `Glove Name, Article Numbers, Colour, Image, EN 388 Code, Abrasion, Cut, Tear, Puncture, Cut Category, Impact, Chemical Resistance, Heat Resistance, Food Safe, Tactile, Product Link`.
+- Image display: the app will show an image if the `Image` column contains a valid URL or a local image file path. If your images are embedded in Excel rather than in cells, please export them to files and add a new column with their file paths or URLs.
+- Booleans such as `Food Safe`, `Chemical Resistance`, and `Heat Resistance` accept values like `Yes/No`, `Y/N`, `True/False`.
+
+## Deployment (Streamlit Cloud)
+- Push this folder to GitHub.
+- On Streamlit Cloud, create a new app pointing to `app.py`. Set the working directory to the repo root and include `requirements.txt`.
+
+## Customisation
+- To add more filters, extend the filter section in `app.py` and ensure the column exists in Excel.
+- For brand styling, adjust `st.set_page_config` and add custom CSS via `st.markdown('<style>...</style>', unsafe_allow_html=True)` if required.
