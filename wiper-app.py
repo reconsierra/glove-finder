@@ -1,3 +1,4 @@
+
 # app.py
 import os
 from typing import Dict, List
@@ -143,8 +144,7 @@ df = load_data(DATA_PATH)
 # -----------------------------
 # Filter definitions & options
 # -----------------------------
-# Display labels -> underlying data columns (for filtering)
-LABEL_TO_COL = {
+LABEL_TO_COL: Dict[str, str] = {
     "Colour": "Colour",
     "Cut Category": "Cut Category",
     "Cut rating": "Cut",
@@ -154,19 +154,52 @@ LABEL_TO_COL = {
 }
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
-def options_for(label: str) -> List:
+# Placeholders to ignore when building option lists
+PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated"}
+
+def _clean_vals(series: pd.Series) -> List[str]:
+    """
+    Normalise and return distinct, non-placeholder values for dropdowns.
+    - Converts to str, strips whitespace
+    - Drops placeholders/blanks
+    - Returns a stable, user-friendly sort:
+        * numeric tokens in ascending order, then alphabetical
+    """
+    vals: List[str] = []
+    if series is None or series.empty:
+        return vals
+    for v in series:
+        s = str(v).strip()
+        if not s:
+            continue
+        if s.lower() in PLACEHOLDERS:
+            continue
+        vals.append(s)  # keep original case for display
+    # Unique + sorted: numbers first by numeric value, then text (case-insensitive)
+    uniq = sorted(set(vals), key=lambda x: (0, int(x)) if x.isdigit() else (1, x.upper()))
+    return uniq
+
+def options_for(label: str) -> List[str]:
     """
     Build option list for non-boolean filters (first option 'Any').
+    Hardened against placeholders and blanks so the list never collapses.
     """
     if label == "Colour":
-        vals = sorted(set(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str)))
+        uniq = _clean_vals(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str))
     elif label == "Cut Category":
-        vals = sorted(set(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str)))
+        uniq = _clean_vals(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str))
+        # Prefer A..F order if present; keep 'X' last
+        order_map = {k: i for i, k in enumerate(list("ABCDEF"))}
+        uniq = sorted(uniq, key=lambda x: (order_map.get(x.upper(), 99), x.upper()))
     elif label == "Cut rating":
-        vals = sorted(set(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str)), key=lambda x: str(x))
+        uniq = _clean_vals(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str))
+        # Numeric levels before 'X' or other tokens
+        def _key(x: str):
+            return (0, int(x)) if x.isdigit() else (1, x.upper())
+        uniq = sorted(uniq, key=_key)
     else:
-        vals = []
-    return ["Any"] + [v for v in vals if v.strip()]
+        uniq = []
+    return ["Any"] + uniq
 
 
 # -----------------------------
@@ -178,15 +211,14 @@ with st.container():
     left_col, right_col = st.columns(2)
 
     # Store selections
-    # For non-boolean filters: value string ("Any" or selected value)
-    # For boolean filters: True (Yes only) or False (Any)
+    # Non-boolean: str ("Any" or value)
+    # Boolean: True (Yes only) or False (Any)
     selections: Dict[str, object] = {}
 
     def render_filter(label: str, col):
         if label in BOOL_LABELS:
-            # Single checkbox: if checked -> filter to Yes; if unchecked -> no filter applied
             key = f"yes_{label}"
-            selections[label] = col.checkbox(label + " (Yes)", value=False, key=key)
+            selections[label] = col.checkbox(label + " (Yes only)", value=False, key=key)
         else:
             opts = options_for(label)
             selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
@@ -211,18 +243,16 @@ if go:
         sel = selections.get(label, "Any")
         if isinstance(sel, str) and sel != "Any":
             colname = LABEL_TO_COL[label]
-            filtered = filtered[filtered[colname].astype(str) == str(sel)]
+            filtered = filtered[filtered[colname].astype(str).str.strip() == sel]
 
     # Boolean filters (single Yes-only checkbox)
     def apply_yes_only(src_col_label: str, yes_checked: bool) -> pd.DataFrame:
         col_bool = src_col_label + " (bool)"
         if not yes_checked or col_bool not in filtered.columns:
-            # Not checked -> no filtering; or no bool column available
-            return filtered                   
+            return filtered
+        # Element-wise mask; treat NaN as False
         mask = filtered[col_bool].fillna(False) == True
         return filtered[mask]
-
-
 
     filtered = apply_yes_only(LABEL_TO_COL["Food Safe?"], bool(selections.get("Food Safe?", False)))
     filtered = apply_yes_only(LABEL_TO_COL["Chemical rated?"], bool(selections.get("Chemical rated?", False)))
@@ -252,24 +282,25 @@ if go:
             if isinstance(link, str) and link.strip():
                 right.link_button("View product", link)
 
-            # Attributes grid (compact)
-            
-attrs = []
-for label in [
-    "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
-    "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
-]:
-
-val = row.get(label, None)
-    if pd.isna(val):
-        continue
-    attrs.append((label, str(val)))
+            # Attributes grid (compact) with integer formatting for EN388 sub-ratings
+            attrs: List[tuple] = []
+            for label in [
+                "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
+                "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
+            ]:
+                val = row.get(label, None)
+                if pd.isna(val):
+                    continue
+                # Show EN388 sub-ratings with no decimals
+                if label in ["Abrasion", "Cut", "Tear", "Puncture"] and isinstance(val, (int, float)):
+                    val = int(val)
+                attrs.append((label, str(val)))
 
             a1, a2 = right.columns(2)
             half = (len(attrs) + 1) // 2
             for col, items in [(a1, attrs[:half]), (a2, attrs[half:])]:
-                for label, val in items:
-                    col.markdown(f"**{label}:** {val}")
+                for lab, v in items:
+                    col.markdown(f"**{lab}:** {v}")
             st.divider()
 
     if not filtered.empty:
