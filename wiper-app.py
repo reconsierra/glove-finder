@@ -1,3 +1,4 @@
+
 # app.py
 import os
 from typing import Dict, List
@@ -149,6 +150,7 @@ LABEL_TO_COL: Dict[str, str] = {
 }
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
+# Placeholders to ignore when building option lists
 PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated"}
 
 def _clean_vals(series: pd.Series) -> List[str]:
@@ -162,6 +164,8 @@ def _clean_vals(series: pd.Series) -> List[str]:
     vals: List[str] = []
     if series is None or series.empty:
         return vals
+    # Drop NA before iterating to avoid 'nan'
+    series = series.dropna()
     for v in series:
         s = str(v).strip()
         if not s:
@@ -175,17 +179,17 @@ def _clean_vals(series: pd.Series) -> List[str]:
 def options_for(label: str) -> List[str]:
     """
     Build option list for non-boolean filters (first option 'Any').
-    Hardened against placeholders and blanks so the list never collapses.
+    Hardened against placeholders/blanks so the list won’t collapse.
     """
     if label == "Colour":
-        uniq = _clean_vals(df.get("Colour", pd.Series(dtype=str)))
+        uniq = _clean_vals(df.get("Colour"))
     elif label == "Cut Category":
-        uniq = _clean_vals(df.get("Cut Category", pd.Series(dtype=str)))
+        uniq = _clean_vals(df.get("Cut Category"))
         # Prefer A..F order if present; keep 'X' after letters
         order_map = {k: i for i, k in enumerate(list("ABCDEF"))}
         uniq = sorted(uniq, key=lambda x: (order_map.get(x.upper(), 99), x.upper()))
     elif label == "Cut rating":
-        uniq = _clean_vals(df.get("Cut", pd.Series(dtype=str)))
+        uniq = _clean_vals(df.get("Cut"))
         # Numeric levels before 'X' (or other tokens)
         def _key(x: str):
             return (0, int(x)) if x.isdigit() else (1, x.upper())
@@ -214,6 +218,9 @@ with st.container():
             selections[label] = col.checkbox(label + " (Yes only)", value=False, key=key)
         else:
             opts = options_for(label)
+            # Debug assist if opts are unexpectedly empty
+            if len(opts) <= 1:
+                col.info(f"No values found for **{label}**. Check data or placeholders.")
             selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
 
     # Render ordered filters — creator defines ORDER_LEFT / ORDER_RIGHT above
@@ -236,7 +243,7 @@ if go:
         sel = selections.get(label, "Any")
         if isinstance(sel, str) and sel != "Any":
             colname = LABEL_TO_COL[label]
-            # Case-insensitive, stripped comparison to avoid subtle mismatches
+            # Case-insensitive, stripped comparison to avoid mismatches
             left = filtered[colname].astype(str).str.strip().str.casefold()
             right = sel.strip().casefold()
             filtered = filtered[left == right]
