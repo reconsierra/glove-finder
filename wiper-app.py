@@ -14,7 +14,7 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT  = ["Cut Category - (new style letter type)", "Cut rating (old style number type)", "Colour (predominant colour only)"]
+ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
 ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # Set to True to show the raw option lists near the controls for diagnostics
 DEBUG = False
