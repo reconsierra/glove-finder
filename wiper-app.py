@@ -1,7 +1,7 @@
 
 # app.py
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
 import streamlit as st
@@ -12,11 +12,10 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 
 # =========================================================
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
-# Left and right columns render top-to-bottom in this order.
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT  = ["Cut Category - (new style letter type)", "Cut rating (old style number type)", "Colour (predominant colour only)"]
-ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
+ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
+ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
 
 
@@ -44,12 +43,14 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
         for idx, img in enumerate(imgs, start=1):
             anchor = getattr(img, "anchor", None)
             row = None
-            # Derive row from image anchor, if possible
+            # Try to derive the row number from the image anchor
             try:
                 if isinstance(anchor, str):
-                    _row = coordinate_to_tuple(anchor)[0]  # (row, col)
+                    # e.g. "D2" -> (row, col)
+                    _row = coordinate_to_tuple(anchor)[0]
                     row = _row
                 else:
+                    # OneCellAnchor / TwoCellAnchor -> ._from.row (0-based)
                     from_anchor = getattr(anchor, "_from", None)
                     if from_anchor is not None:
                         row = int(from_anchor.row) + 1
@@ -59,12 +60,14 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
             filename = f"row_{row or idx}.png"
             out_path = os.path.join(images_dir, filename)
             try:
+                # Preferred: direct bytes (openpyxl internal)
                 data = img._data()  # type: ignore[attr-defined]
                 with open(out_path, "wb") as f:
                     f.write(data)
                 if row:
                     mapping[row] = out_path
             except Exception:
+                # Fallback: try PIL image object, if present
                 try:
                     from PIL import Image as PILImage
                     pil = getattr(img, "_image", None)
@@ -84,17 +87,17 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
 # -----------------------------
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> pd.DataFrame:
-    # Extract embedded images first; build row -> path mapping
+    # Extract any embedded images first; create row -> path mapping
     row_to_img = extract_embedded_images(path)
 
     df = pd.read_excel(path, engine="openpyxl")
     df.columns = [c.strip() for c in df.columns]
 
-    # Fill Image column with extracted files where missing
+    # Ensure Image column exists; if empty, fill from extracted mapping by Excel row number
     if "Image" not in df.columns:
         df["Image"] = None
     for i in range(len(df)):
-        excel_row = i + 2  # header at row 1
+        excel_row = i + 2  # header is row 1
         if pd.isna(df.at[i, "Image"]) or not str(df.at[i, "Image"]).strip():
             if excel_row in row_to_img:
                 df.at[i, "Image"] = row_to_img[excel_row]
@@ -125,10 +128,10 @@ def load_data(path: str) -> pd.DataFrame:
         if col in df.columns:
             df[col + " (bool)"] = df[col].apply(to_bool)
 
-    # Tidy strings for common filter columns
-    for col in ["EN 388 Code", "Colour", "Cut Category", "Cut"]:
+    # Tidy strings
+    for col in ["EN 388 Code", "Colour", "Cut Category"]:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
+            df[col] = df[col].fillna("").astype(str).str.strip()
 
     return df
 
@@ -153,19 +156,16 @@ BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 # Placeholders to ignore when building option lists
 PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated"}
 
-def _clean_vals(series: pd.Series) -> List[str]:
-    """
+def _clean_vals(series: pd.Series) -> List"""
     Normalise and return distinct, non-placeholder values for dropdowns.
     - Converts to str, strips whitespace
     - Drops placeholders/blanks
-    - Returns a stable sort:
-        * numeric tokens first by numeric value, then text (case-insensitive)
+    - Returns a stable, user-friendly sort:
+        * numeric tokens in ascending order, then alphabetical
     """
     vals: List[str] = []
     if series is None or series.empty:
         return vals
-    # Drop NA before iterating to avoid 'nan'
-    series = series.dropna()
     for v in series:
         s = str(v).strip()
         if not s:
@@ -173,24 +173,24 @@ def _clean_vals(series: pd.Series) -> List[str]:
         if s.lower() in PLACEHOLDERS:
             continue
         vals.append(s)  # keep original case for display
+    # Unique + sorted: numbers first by numeric value, then text (case-insensitive)
     uniq = sorted(set(vals), key=lambda x: (0, int(x)) if x.isdigit() else (1, x.upper()))
     return uniq
 
-def options_for(label: str) -> List[str]:
-    """
+def options_for(label: str) -> List"""
     Build option list for non-boolean filters (first option 'Any').
-    Hardened against placeholders/blanks so the list won’t collapse.
+    Hardened against placeholders and blanks so the list never collapses.
     """
     if label == "Colour":
-        uniq = _clean_vals(df.get("Colour"))
+        uniq = _clean_vals(df.get("Colour", pd.Series(dtype=str)).dropna().astype(str))
     elif label == "Cut Category":
-        uniq = _clean_vals(df.get("Cut Category"))
-        # Prefer A..F order if present; keep 'X' after letters
+        uniq = _clean_vals(df.get("Cut Category", pd.Series(dtype=str)).dropna().astype(str))
+        # Prefer A..F order if present; keep 'X' last
         order_map = {k: i for i, k in enumerate(list("ABCDEF"))}
         uniq = sorted(uniq, key=lambda x: (order_map.get(x.upper(), 99), x.upper()))
     elif label == "Cut rating":
-        uniq = _clean_vals(df.get("Cut"))
-        # Numeric levels before 'X' (or other tokens)
+        uniq = _clean_vals(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str))
+        # Numeric levels before 'X' or other tokens
         def _key(x: str):
             return (0, int(x)) if x.isdigit() else (1, x.upper())
         uniq = sorted(uniq, key=_key)
@@ -218,9 +218,6 @@ with st.container():
             selections[label] = col.checkbox(label + " (Yes only)", value=False, key=key)
         else:
             opts = options_for(label)
-            # Debug assist if opts are unexpectedly empty
-            if len(opts) <= 1:
-                col.info(f"No values found for **{label}**. Check data or placeholders.")
             selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
 
     # Render ordered filters — creator defines ORDER_LEFT / ORDER_RIGHT above
@@ -238,21 +235,19 @@ with st.container():
 if go:
     filtered = df.copy()
 
-    # Non-boolean filters: normalise both sides before equality
+    # Non-boolean filters
     for label in ["Colour", "Cut Category", "Cut rating"]:
         sel = selections.get(label, "Any")
         if isinstance(sel, str) and sel != "Any":
             colname = LABEL_TO_COL[label]
-            # Case-insensitive, stripped comparison to avoid mismatches
-            left = filtered[colname].astype(str).str.strip().str.casefold()
-            right = sel.strip().casefold()
-            filtered = filtered[left == right]
+            filtered = filtered[filtered[colname].astype(str).str.strip() == sel]
 
     # Boolean filters (single Yes-only checkbox)
     def apply_yes_only(src_col_label: str, yes_checked: bool) -> pd.DataFrame:
         col_bool = src_col_label + " (bool)"
         if not yes_checked or col_bool not in filtered.columns:
             return filtered
+        # Element-wise mask; treat NaN as False
         mask = filtered[col_bool].fillna(False) == True
         return filtered[mask]
 
@@ -315,4 +310,3 @@ if go:
         )
 else:
     st.info("Choose filters above and press **Search** to see matching gloves.")
-
