@@ -284,7 +284,7 @@ with st.container():
     def render_filter(label: str, col):
         # Yes-only checkboxes
         if label in {"Food Safe?", "Chemical rated?", "Heat rated?"}:
-            selections[label] = col.checkbox(label + " (Yes)", value=False, key=f"cb_{label}")
+            selections[label] = col.checkbox(label + " (Yes only)", value=False, key=f"cb_{label}")
             return
 
         # Dropdowns
