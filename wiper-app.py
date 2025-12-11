@@ -259,7 +259,7 @@ if go:
                 "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
             ]:
                 
-al = row.get(label, None)
+val = row.get(label, None)
     if pd.isna(val):
         continue
     attrs.append((label, str(val)))
