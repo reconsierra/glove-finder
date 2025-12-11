@@ -20,8 +20,8 @@ ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # ✅ Display name mappings for UI (filters and results attributes)
 DISPLAY_LABELS: Dict[str, str] = {
     "Colour": "Glove Colour (predominant colour)",
-    "Cut Category": "Cut Category (A–F)",
-    "Cut rating": "Cut Level (1-5)",
+    "Cut Category": "Cut Category (New style A–F)",
+    "Cut rating": "Cut Level (Old style 1-5)",
     "Food Safe?": "Food Safe",
     "Chemical rated?": "Chemical Resistant",
     "Heat rated?": "Heat Resistant",
@@ -313,7 +313,7 @@ with st.container():
         # Yes-only checkboxes
         if label in {"Food Safe?", "Chemical rated?", "Heat rated?"}:
             ui_label = DISPLAY_LABELS.get(label, label)
-            selections[label] = col.checkbox(ui_label + " (Yes only)", value=False, key=f"cb_{label}")
+            selections[label] = col.checkbox(ui_label + " (Yes)", value=False, key=f"cb_{label}")
             return
 
         # Dropdowns
