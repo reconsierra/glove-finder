@@ -259,14 +259,10 @@ if go:
                 "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
             ]:
                 
-val = row.get(label, None)
+al = row.get(label, None)
     if pd.isna(val):
         continue
-    # Format numeric EN388 sub-ratings without decimals
-    if label in ["Abrasion", "Cut", "Tear", "Puncture"] and isinstance(val, (int, float)):
-        val = int(val)
     attrs.append((label, str(val)))
-
 
             a1, a2 = right.columns(2)
             half = (len(attrs) + 1) // 2
