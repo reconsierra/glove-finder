@@ -16,6 +16,33 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
 ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
 ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
+
+# ✅ Display name mappings for UI (filters and results attributes)
+DISPLAY_LABELS: Dict[str, str] = {
+    "Colour": "Glove Colour",
+    "Cut Category": "Cut Category (A–F)",
+    "Cut rating": "Cut Level",
+    "Food Safe?": "Food Safe",
+    "Chemical rated?": "Chemical Resistant",
+    "Heat rated?": "Heat Resistant",
+}
+
+DISPLAY_ATTRS: Dict[str, str] = {
+    "Article Numbers": "Article #",
+    "Colour": "Glove Colour",
+    "EN 388 Code": "EN388 Rating",
+    "Abrasion": "Abrasion Level",
+    "Cut": "Cut Level",
+    "Tear": "Tear Strength",
+    "Puncture": "Puncture Resistance",
+    "Cut Category": "Cut Category",
+    "Impact": "Impact Protection",
+    "Chemical Resistance": "Chemical Resistant",
+    "Heat Resistance": "Heat Resistant",
+    "Food Safe": "Food Safe",
+    "Tactile": "Tactile Sensitivity",
+}
+
 # Set to True to show the raw option lists near the controls for diagnostics
 DEBUG = False
 # =========================================================
@@ -285,14 +312,16 @@ with st.container():
     def render_filter(label: str, col):
         # Yes-only checkboxes
         if label in {"Food Safe?", "Chemical rated?", "Heat rated?"}:
-            selections[label] = col.checkbox(label + " (Yes only)", value=False, key=f"cb_{label}")
+            ui_label = DISPLAY_LABELS.get(label, label)
+            selections[label] = col.checkbox(ui_label + " (Yes only)", value=False, key=f"cb_{label}")
             return
 
         # Dropdowns
         opts = options_for(label)
         if DEBUG:
             col.caption(f"{label} options: {opts}")
-        selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
+        ui_label = DISPLAY_LABELS.get(label, label)
+        selections[label] = col.selectbox(ui_label, opts, index=0, key=f"sb_{label}")
 
     for lbl in ORDER_LEFT:
         render_filter(lbl, left_col)
@@ -374,7 +403,8 @@ if go:
                 # Show EN388 sub-ratings with no decimals
                 if label in ["Abrasion", "Cut", "Tear", "Puncture"] and isinstance(val, (int, float)):
                     val = int(val)
-                attrs.append((label, str(val)))
+                display_name = DISPLAY_ATTRS.get(label, label)
+                attrs.append((display_name, str(val)))
 
             a1, a2 = right.columns(2)
             half = (len(attrs) + 1) // 2
