@@ -14,10 +14,9 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
 # Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
-ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
+ORDER_LEFT  = ["Colour", "Cut Category", "Cut rating"]
+ORDER_RIGHT = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 # =========================================================
-
 
 # -----------------------------
 # Embedded image extraction
@@ -43,14 +42,11 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
         for idx, img in enumerate(imgs, start=1):
             anchor = getattr(img, "anchor", None)
             row = None
-            # Try to derive the row number from the image anchor
             try:
                 if isinstance(anchor, str):
-                    # e.g. "D2" -> (row, col)
-                    _row = coordinate_to_tuple(anchor)[0]
+                    _row = coordinate_to_tuple(anchor)[0]  # (row, col)
                     row = _row
                 else:
-                    # OneCellAnchor / TwoCellAnchor -> ._from.row (0-based)
                     from_anchor = getattr(anchor, "_from", None)
                     if from_anchor is not None:
                         row = int(from_anchor.row) + 1
@@ -60,14 +56,12 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
             filename = f"row_{row or idx}.png"
             out_path = os.path.join(images_dir, filename)
             try:
-                # Preferred: direct bytes (openpyxl internal)
                 data = img._data()  # type: ignore[attr-defined]
                 with open(out_path, "wb") as f:
                     f.write(data)
                 if row:
                     mapping[row] = out_path
             except Exception:
-                # Fallback: try PIL image object, if present
                 try:
                     from PIL import Image as PILImage
                     pil = getattr(img, "_image", None)
@@ -80,7 +74,6 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
     except Exception:
         return mapping
     return mapping
-
 
 # -----------------------------
 # Data loader
@@ -135,15 +128,13 @@ def load_data(path: str) -> pd.DataFrame:
 
     return df
 
-
 DATA_PATH = "wurth_safety_glove_MASTER List.xlsx"
 df = load_data(DATA_PATH)
-
 
 # -----------------------------
 # Filter definitions & options
 # -----------------------------
-LABEL_TO_COL: Dict[str, str] = {
+LABEL_TO_COL = {
     "Colour": "Colour",
     "Cut Category": "Cut Category",
     "Cut rating": "Cut",
@@ -153,28 +144,23 @@ LABEL_TO_COL: Dict[str, str] = {
 }
 BOOL_LABELS = {"Food Safe?", "Chemical rated?", "Heat rated?"}
 
-# Placeholders to ignore when building option lists
+# Helpers to build clean option sets
 PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated"}
 
-def _clean_vals(series: pd.Series) -> List"""
-    Normalise and return distinct, non-placeholder values for dropdowns.
-    - Converts to str, strips whitespace
-    - Drops placeholders/blanks
-    - Returns a stable, user-friendly sort:
-        * numeric tokens in ascending order, then alphabetical
-    """
-    vals: List[str] = []
+def _clean_vals(series: pd.Series) -> List"""Normalise and return distinct, non-placeholder values."""
     if series is None or series.empty:
-        return vals
+        return []
+    vals = []
     for v in series:
         s = str(v).strip()
-        if not s:
+        if s == "":
             continue
-        if s.lower() in PLACEHOLDERS:
+        s_norm = s.lower()
+        if s_norm in PLACEHOLDERS:
             continue
-        vals.append(s)  # keep original case for display
-    # Unique + sorted: numbers first by numeric value, then text (case-insensitive)
-    uniq = sorted(set(vals), key=lambda x: (0, int(x)) if x.isdigit() else (1, x.upper()))
+        vals.append(s)  # keep original case for display (e.g., 'X', colours)
+    # Deduplicate while preserving case, then sort for UX
+    uniq = sorted(set(vals), key=lambda x: (x.isdigit(), x))  # digits first then lexicographic
     return uniq
 
 def options_for(label: str) -> List"""
@@ -190,14 +176,13 @@ def options_for(label: str) -> List"""
         uniq = sorted(uniq, key=lambda x: (order_map.get(x.upper(), 99), x.upper()))
     elif label == "Cut rating":
         uniq = _clean_vals(df.get("Cut", pd.Series(dtype=str)).dropna().astype(str))
-        # Numeric levels before 'X' or other tokens
+        # Put numeric levels before 'X'
         def _key(x: str):
             return (0, int(x)) if x.isdigit() else (1, x.upper())
         uniq = sorted(uniq, key=_key)
     else:
         uniq = []
     return ["Any"] + uniq
-
 
 # -----------------------------
 # Filter UI (two columns, code-ordered)
@@ -220,14 +205,13 @@ with st.container():
             opts = options_for(label)
             selections[label] = col.selectbox(label, opts, index=0, key=f"sb_{label}")
 
-    # Render ordered filters — creator defines ORDER_LEFT / ORDER_RIGHT above
+    # Render ordered filters — creator defines ORDER_LEFT / ORDER_RIGHT
     for label in ORDER_LEFT:
         render_filter(label, left_col)
     for label in ORDER_RIGHT:
         render_filter(label, right_col)
 
     go = st.button("Search", type="primary")
-
 
 # -----------------------------
 # Apply filters
