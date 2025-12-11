@@ -257,8 +257,7 @@ if go:
             for label in [
                 "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
                 "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
-            ]:
-                
+            ]:                
 val = row.get(label, None)
     if pd.isna(val):
         continue
