@@ -19,9 +19,9 @@ ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 
 # ✅ Display name mappings for UI (filters and results attributes)
 DISPLAY_LABELS: Dict[str, str] = {
-    "Colour": "Glove Colour",
+    "Colour": "Glove Colour (predominant colour)",
     "Cut Category": "Cut Category (A–F)",
-    "Cut rating": "Cut Level",
+    "Cut rating": "Cut Level (1-5)",
     "Food Safe?": "Food Safe",
     "Chemical rated?": "Chemical Resistant",
     "Heat rated?": "Heat Resistant",
