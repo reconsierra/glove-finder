@@ -247,7 +247,6 @@ if go:
         col_bool = src_col_label + " (bool)"
         if not yes_checked or col_bool not in filtered.columns:
             return filtered
-        # Element-wise mask; treat NaN as False
         mask = filtered[col_bool].fillna(False) == True
         return filtered[mask]
 
@@ -279,8 +278,8 @@ if go:
             if isinstance(link, str) and link.strip():
                 right.link_button("View product", link)
 
-            # Attributes grid (compact) with integer formatting for EN388 sub-ratings
-            attrs: List[tuple] = []
+            # Attributes grid (compact)
+            attrs = []
             for label in [
                 "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
                 "Cut Category", "Impact", "Chemical Resistance", "Heat Resistance", "Food Safe", "Tactile"
@@ -288,16 +287,13 @@ if go:
                 val = row.get(label, None)
                 if pd.isna(val):
                     continue
-                # Show EN388 sub-ratings with no decimals
-                if label in ["Abrasion", "Cut", "Tear", "Puncture"] and isinstance(val, (int, float)):
-                    val = int(val)
                 attrs.append((label, str(val)))
 
             a1, a2 = right.columns(2)
             half = (len(attrs) + 1) // 2
             for col, items in [(a1, attrs[:half]), (a2, attrs[half:])]:
-                for lab, v in items:
-                    col.markdown(f"**{lab}:** {v}")
+                for label, val in items:
+                    col.markdown(f"**{label}:** {val}")
             st.divider()
 
     if not filtered.empty:
