@@ -44,14 +44,11 @@ DISPLAY_ATTRS: Dict[str, str] = {
     "Tactile": "Tactile",
 }
 
-# If True, shows debug details (resolved columns + option counts)
 DEBUG = False
-
 PLACEHOLDERS = {"", "-", "n/a", "na", "none", "null", "not en 388 rated", "nan"}
 
-
 # -----------------------------
-# Small helpers
+# Helpers
 # -----------------------------
 def norm(x: object) -> str:
     if pd.isna(x):
@@ -64,7 +61,7 @@ def disp(x: object) -> str:
     return str(x).strip()
 
 def as_int_string_if_number(s: str) -> str:
-    # turns "1.0" -> "1", leaves "X" etc
+    """Turn '1.0' -> '1' for nicer Cut values; leave tokens like 'X' untouched."""
     try:
         f = float(s)
         if f.is_integer():
@@ -74,15 +71,11 @@ def as_int_string_if_number(s: str) -> str:
         return s
 
 def resolve_column(aliases: List[str], df_cols_lower: Dict[str, str]) -> Optional[str]:
-    """
-    Resolve a column name using a list of aliases (already lowercased).
-    Returns the original column name or None.
-    """
+    """Resolve a column name using a list of lowercase aliases. Returns original name or None."""
     for a in aliases:
         if a in df_cols_lower:
             return df_cols_lower[a]
     return None
-
 
 # -----------------------------
 # Embedded image extraction (safe / non-fatal)
@@ -91,8 +84,7 @@ def resolve_column(aliases: List[str], df_cols_lower: Dict[str, str]) -> Optiona
 def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[int, str]:
     """
     Best-effort extract embedded images from the first worksheet.
-    Returns a dict: {excel_row_number: saved_image_path}
-    Never raises; returns {} on failure.
+    Returns {excel_row_number: saved_image_path}. Never raises; returns {} on failure.
     """
     mapping: Dict[int, str] = {}
     try:
@@ -127,16 +119,14 @@ def extract_embedded_images(xlsx_path: str, images_dir: str = "images") -> Dict[
                 if row:
                     mapping[row] = out_path
             except Exception:
-                # quietly skip image if extraction fails
                 pass
 
     except Exception:
         return {}
     return mapping
 
-
 # -----------------------------
-# Load + normalise data (guarantees dropdowns have values when data exists)
+# Load + normalise data
 # -----------------------------
 @st.cache_data(show_spinner=False)
 def load_data(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
@@ -147,21 +137,18 @@ def load_data(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
     df.columns = [c.strip() for c in df.columns]
     cols_lower = {c.lower(): c for c in df.columns}
 
-    # Resolve key columns with aliases
     colour_col = resolve_column(["colour", "color"], cols_lower) or "Colour"
     cutcat_col = resolve_column(["cut category", "cutcategory"], cols_lower) or "Cut Category"
     cut_col = resolve_column(["cut"], cols_lower) or "Cut"
 
-    # Validate presence
     missing = [c for c in [colour_col, cutcat_col, cut_col] if c not in df.columns]
     if missing:
         raise KeyError(f"Missing required column(s): {missing}. Found columns: {list(df.columns)}")
 
-    # Create normalised columns for filtering (string-safe)
+    # Normalised helper columns for filtering
     df["_colour_norm"] = df[colour_col].astype(str).str.strip().str.casefold()
     df["_cutcat_norm"] = df[cutcat_col].astype(str).str.strip().str.casefold()
 
-    # Cut display: 1.0 -> 1
     cut_display = df[cut_col].astype(str).str.strip().map(as_int_string_if_number)
     df["_cut_display"] = cut_display
     df["_cut_norm"] = cut_display.str.strip().str.casefold()
@@ -181,7 +168,6 @@ def load_data(path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
 
     resolved = {"Colour": colour_col, "Cut Category": cutcat_col, "Cut": cut_col}
     return df, resolved
-
 
 def clean_options(series: pd.Series) -> List[str]:
     """
@@ -210,7 +196,6 @@ def clean_options(series: pd.Series) -> List[str]:
     raw_uniq = [v for v in raw.unique().tolist() if v and norm(v) not in PLACEHOLDERS]
     return raw_uniq
 
-
 # -----------------------------
 # Main app (never blank: shows errors)
 # -----------------------------
@@ -220,18 +205,22 @@ try:
 
     # Attempt image extraction; non-fatal
     row_to_img = extract_embedded_images(DATA_PATH)
+
     if "Image" not in df.columns:
         df["Image"] = None
+
+    # ✅ FIX: force Image column to object dtype so string paths can be assigned
+    df["Image"] = df["Image"].astype("object")
+
     for i in range(len(df)):
         excel_row = i + 2
         if (pd.isna(df.at[i, "Image"]) or not str(df.at[i, "Image"]).strip()) and excel_row in row_to_img:
             df.at[i, "Image"] = row_to_img[excel_row]
 
-    # Build dropdown option sets (guaranteed to include data if present)
+    # Build dropdown option sets
     colour_opts = ["Any"] + sorted(set(clean_options(df[resolved_cols["Colour"]])), key=lambda x: x.casefold())
 
     cutcat_opts = ["Any"] + clean_options(df[resolved_cols["Cut Category"]])
-    # Sort Cut Category A..F then others
     order_map = {k: i for i, k in enumerate(list("ABCDEF"))}
     cutcat_opts = ["Any"] + sorted(
         [x for x in cutcat_opts[1:] if x],
@@ -239,7 +228,6 @@ try:
     )
 
     cut_opts = ["Any"] + clean_options(df["_cut_display"])
-    # Sort cut numeric first then tokens like X
     def cut_key(x: str):
         return (0, int(x)) if x.isdigit() else (1, x.upper())
     cut_opts = ["Any"] + sorted([x for x in cut_opts[1:] if x], key=cut_key)
@@ -284,7 +272,6 @@ try:
     if go:
         filtered = df.copy()
 
-        # Dropdown filters
         if selections.get("Colour") and selections["Colour"] != "Any":
             target = norm(selections["Colour"])
             filtered = filtered[filtered["_colour_norm"] == target]
@@ -297,7 +284,6 @@ try:
             target = norm(selections["Cut rating"])
             filtered = filtered[filtered["_cut_norm"] == target]
 
-        # Yes-only filters (unchecked = no filter)
         def yes_only(df_in: pd.DataFrame, src_col: str, key: str) -> pd.DataFrame:
             if bool(selections.get(key, False)) and (src_col + " (bool)") in df_in.columns:
                 mask = df_in[src_col + " (bool)"].fillna(False) == True
@@ -328,7 +314,6 @@ try:
                 if isinstance(link, str) and link.strip():
                     c2.link_button("View product", link)
 
-                # Attributes (compact) + no decimals for EN388 sub-ratings
                 attrs = []
                 for key in [
                     "Article Numbers", "Colour", "EN 388 Code", "Abrasion", "Cut", "Tear", "Puncture",
@@ -355,5 +340,5 @@ except Exception as e:
     st.exception(e)
     st.info(
         "Common causes: missing Excel file in repo root, workbook headers not matching, "
-        "or a dependency missing in requirements.txt (needs streamlit, pandas, openpyxl, Pillow)."
+        "or missing requirements (streamlit, pandas, openpyxl, Pillow)."
     )
