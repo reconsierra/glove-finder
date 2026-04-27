@@ -12,16 +12,16 @@ st.caption("Find the right glove by cut level/category, colour and safety attrib
 
 # =========================================================
 # 🔧 DISPLAY ORDER — adjust here (app creator only)
-# Valid labels: "Colour", "Cut Category", "Cut rating"
+# Valid labels: "Colour", "Cut Category", "Cut rating",
 #               "Food Safe?", "Chemical rated?", "Heat rated?"
-ORDER_LEFT:  List[str] = ["Cut Category", "Cut rating", "Colour"]
+ORDER_LEFT:  List[str] = ["Colour", "Cut Category", "Cut rating"]
 ORDER_RIGHT: List[str] = ["Food Safe?", "Chemical rated?", "Heat rated?"]
 
 # ✅ Display name mappings for UI (filters and results attributes)
 DISPLAY_LABELS: Dict[str, str] = {
-    "Colour": "Glove Colour (predominant colour)",
-    "Cut Category": "Cut Category (New style A–F)",
-    "Cut rating": "Cut Level (Old style 1-5)",
+    "Colour": "Glove Colour",
+    "Cut Category": "Cut Category (A–F)",
+    "Cut rating": "Cut Level",
     "Food Safe?": "Food Safe",
     "Chemical rated?": "Chemical Resistant",
     "Heat rated?": "Heat Resistant",
@@ -134,8 +134,7 @@ def _as_int_string_if_number(s: str) -> str:
     except Exception:
         return s
 
-def _resolve_column(preferred_aliases: List[str], df_cols_lower: Dict[str, str]) -> Optional[str]:
-    """
+def _resolve_column(preferred_aliases: List[str], df_cols_lower: Dict[str, str]) -> Optional"""
     Given a list of lowercased aliases (priority order), return the actual DataFrame column
     name that matches, else None.
     """
@@ -220,8 +219,7 @@ CUT_COL    = df.attrs.get("cut_col", "Cut")
 # -----------------------------
 # Option builders (robust)
 # -----------------------------
-def _clean_distinct(series: pd.Series) -> List[str]:
-    """
+def _clean_distinct(series: pd.Series) -> List"""
     Distinct, non-placeholder strings for dropdowns, preserving display case.
     If series is empty, returns [].
     """
@@ -247,8 +245,7 @@ def _clean_distinct(series: pd.Series) -> List[str]:
             uniq.append(v)
     return uniq
 
-def _fallback_distinct(series: pd.Series) -> List[str]:
-    """
+def _fallback_distinct(series: pd.Series) -> List"""
     Fallback that only trims and drops NaN; used if cleaned result is empty.
     Guarantees we still show something from the underlying column.
     """
@@ -258,8 +255,7 @@ def _fallback_distinct(series: pd.Series) -> List[str]:
     uniq = [v for v in series.unique().tolist() if v]
     return uniq
 
-def options_for(label: str) -> List[str]:
-    """
+def options_for(label: str) -> List"""
     Build option list for non-boolean filters (first option 'Any').
     Hardened against placeholders/blanks and with fallbacks so lists never collapse.
     """
@@ -313,7 +309,7 @@ with st.container():
         # Yes-only checkboxes
         if label in {"Food Safe?", "Chemical rated?", "Heat rated?"}:
             ui_label = DISPLAY_LABELS.get(label, label)
-            selections[label] = col.checkbox(ui_label + " (Yes)", value=False, key=f"cb_{label}")
+            selections[label] = col.checkbox(ui_label + " (Yes only)", value=False, key=f"cb_{label}")
             return
 
         # Dropdowns
